@@ -6,6 +6,7 @@ using Glarbot;
 var builder = Host.CreateApplicationBuilder();
 builder.Logging.AddConsole();
 builder.Services.AddHostedService<Glarbot.Glarbot>();
+builder.Services.AddTransient<IGoogleSheetsService, GoogleSheetsService>();
 builder.Services.AddOptions<Settings>()
     .Bind(builder.Configuration.GetSection(nameof(Settings)))
     .ValidateDataAnnotations()

@@ -1,8 +1,4 @@
-﻿using Google.Apis.Auth.OAuth2;
-using Google.Apis.Services;
-using Google.Apis.Sheets.v4;
-using Google.Apis.Sheets.v4.Data;
-using HtmlAgilityPack;
+﻿using HtmlAgilityPack;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -10,13 +6,23 @@ using System.Web;
 
 namespace Glarbot
 {
-    internal class Glarbot(IOptions<Settings> settings,
-        IOptions<GoogleSettings> googleSettings,
-        ILogger<Glarbot> logger) : BackgroundService
+    internal class Glarbot : BackgroundService
     {
-        private readonly Settings _settings = settings.Value;
-        private readonly GoogleSettings _googleSettings = googleSettings.Value;
-        private readonly ILogger<Glarbot> _logger = logger;
+        private readonly IGoogleSheetsService _googleSheetsService;
+        private readonly Settings _settings;
+        private readonly GoogleSettings _googleSettings;
+        private readonly ILogger<Glarbot> _logger;
+
+        public Glarbot(IGoogleSheetsService sheetsService,
+            IOptions<Settings> settings,
+            IOptions<GoogleSettings> googleSettings,
+            ILogger<Glarbot> logger)
+        {
+            _googleSheetsService = sheetsService;
+            _settings = settings.Value;
+            _googleSettings = googleSettings.Value;
+            _logger = logger;
+        }
 
         // as per new httpclient guidelines
         // https://learn.microsoft.com/en-us/dotnet/fundamentals/networking/http/httpclient-guidelines
@@ -32,29 +38,11 @@ namespace Glarbot
             var lastPoll = DateTimeOffset.Now;
             var failCount = 0;
 
-            var credentialJson = CredentialHelper.GetGoogleCredential(
-                _googleSettings.PrivateKeyId,
-                _googleSettings.PrivateKey,
-                _googleSettings.ClientId
-            );
+            var test = await _googleSheetsService.GetAsync("Data!A1:A1", cancellationToken);
 
-            var googleCredential = GoogleCredential.FromJson(credentialJson)
-                .CreateScoped(SheetsService.Scope.Spreadsheets);
+            await _googleSheetsService.UpdateAsync("Data!A2:A2", "test", cancellationToken);
 
-            var sheetsService = new SheetsService(new BaseClientService.Initializer
-            {
-                ApplicationName = "Glarbot",
-                HttpClientInitializer = googleCredential
-            });
-
-            //await sheetsService.Spreadsheets.Values.Append(new ValueRange
-            //{
-            //    Values = [["test"]]
-            //}, _settings.SpreadsheetId, "Data!A1:A1").ExecuteAsync(cancellationToken);
-
-            var test = await sheetsService.Spreadsheets.Values
-                .Get(_googleSettings.SpreadsheetId, "Data!A1:A1")
-                .ExecuteAsync(cancellationToken);
+            await _googleSheetsService.AppendAsync("Data!A1:A1", ["test"], cancellationToken);
 
             while (!cancellationToken.IsCancellationRequested)
             {
