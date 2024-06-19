@@ -38,6 +38,9 @@ namespace Glarbot
             var lastPoll = DateTimeOffset.Now;
             var failCount = 0;
 
+            var test = await _googleSheetsService.GetAsync("Data!A1:A1", cancellationToken);
+            _logger.LogInformation("Test: {test}", test);
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogInformation("Pulling Feed.");
