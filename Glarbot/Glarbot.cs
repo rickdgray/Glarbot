@@ -1,4 +1,8 @@
-﻿using HtmlAgilityPack;
+﻿using Google.Apis.Auth.OAuth2;
+using Google.Apis.Services;
+using Google.Apis.Sheets.v4;
+using Google.Apis.Sheets.v4.Data;
+using HtmlAgilityPack;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -7,9 +11,11 @@ using System.Web;
 namespace Glarbot
 {
     internal class Glarbot(IOptions<Settings> settings,
+        IOptions<GoogleSettings> googleSettings,
         ILogger<Glarbot> logger) : BackgroundService
     {
         private readonly Settings _settings = settings.Value;
+        private readonly GoogleSettings _googleSettings = googleSettings.Value;
         private readonly ILogger<Glarbot> _logger = logger;
 
         // as per new httpclient guidelines
@@ -25,6 +31,30 @@ namespace Glarbot
 
             var lastPoll = DateTimeOffset.Now;
             var failCount = 0;
+
+            var credentialJson = CredentialHelper.GetGoogleCredential(
+                _googleSettings.PrivateKeyId,
+                _googleSettings.PrivateKey,
+                _googleSettings.ClientId
+            );
+
+            var googleCredential = GoogleCredential.FromJson(credentialJson)
+                .CreateScoped(SheetsService.Scope.Spreadsheets);
+
+            var sheetsService = new SheetsService(new BaseClientService.Initializer
+            {
+                ApplicationName = "Glarbot",
+                HttpClientInitializer = googleCredential
+            });
+
+            //await sheetsService.Spreadsheets.Values.Append(new ValueRange
+            //{
+            //    Values = [["test"]]
+            //}, _settings.SpreadsheetId, "Data!A1:A1").ExecuteAsync(cancellationToken);
+
+            var test = await sheetsService.Spreadsheets.Values
+                .Get(_googleSettings.SpreadsheetId, "Data!A1:A1")
+                .ExecuteAsync(cancellationToken);
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -55,7 +85,7 @@ namespace Glarbot
                 {
                     _logger.LogInformation("Reddit not responding.");
 
-                    await PushNotification("RedditPushDispatcher", "Reddit not responding.", null, cancellationToken);
+                    await PushNotification("Glarbot", "Reddit not responding.", null, cancellationToken);
                 }
 
                 if (nodes != null)
@@ -90,7 +120,7 @@ namespace Glarbot
                             title = $"{title}: {post.Flair}";
                         }
 
-                        await PushNotification(title, message, post.Url, cancellationToken);
+                        //await PushNotification(title, message, post.Url, cancellationToken);
 
                         _logger.LogDebug("Pushed notification; delaying for 3 seconds...");
 

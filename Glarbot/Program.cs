@@ -10,5 +10,9 @@ builder.Services.AddOptions<Settings>()
     .Bind(builder.Configuration.GetSection(nameof(Settings)))
     .ValidateDataAnnotations()
     .ValidateOnStart();
+builder.Services.AddOptions<GoogleSettings>()
+    .Bind(builder.Configuration.GetSection(nameof(GoogleSettings)))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Build().Run();
