@@ -38,12 +38,6 @@ namespace Glarbot
             var lastPoll = DateTimeOffset.Now;
             var failCount = 0;
 
-            var test = await _googleSheetsService.GetAsync("Data!A1:A1", cancellationToken);
-
-            await _googleSheetsService.UpdateAsync("Data!A2:A2", "test", cancellationToken);
-
-            await _googleSheetsService.AppendAsync("Data!A1:A1", ["test"], cancellationToken);
-
             while (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogInformation("Pulling Feed.");
@@ -100,23 +94,15 @@ namespace Glarbot
                             continue;
                         }
 
-                        var title = "Gaming Leaks and Rumors";
-                        var message = $"{post.Title}. {post.CommentCount} comments.";
+                        await _googleSheetsService.AppendAsync([post.Flair, post.Title, DateTime.UtcNow.ToString(), post.Url], cancellationToken);
 
-                        if (!string.IsNullOrWhiteSpace(post.Flair))
-                        {
-                            title = $"{title}: {post.Flair}";
-                        }
-
-                        //await PushNotification(title, message, post.Url, cancellationToken);
-
-                        _logger.LogDebug("Pushed notification; delaying for 3 seconds...");
+                        _logger.LogDebug("Dumped post data; delaying for 3 seconds...");
 
                         await Task.Delay(3000, cancellationToken);
                     }
 
                     _logger.LogInformation(
-                        "Pushed all notifications. Waiting until next poll time: {pollTime}",
+                        "Dumped all posts. Waiting until next poll time: {pollTime}",
                         DateTimeOffset.Now.AddMinutes(_settings.PollRateInMinutes));
                 }
 

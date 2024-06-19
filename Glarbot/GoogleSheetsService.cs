@@ -43,19 +43,16 @@ namespace Glarbot
             await action.ExecuteAsync(cancellationToken);
         }
 
-        public async Task AppendAsync(string range, IEnumerable<string> values, CancellationToken cancellationToken)
+        public async Task AppendAsync(IEnumerable<string> values, CancellationToken cancellationToken)
         {
             // deliberate nested cast
             var valueRange = new ValueRange
             {
-                Values = (IList<IList<object>>)values
-                    .Select(v => new List<object> { v })
-                    .Cast<IList<object>>()
-                    .ToList()
+                Values = [values.Cast<object>().ToList()]
             };
 
             var action = _sheetsService.Spreadsheets.Values
-                .Append(valueRange, _googleSettings.SpreadsheetId, range);
+                .Append(valueRange, _googleSettings.SpreadsheetId, "Data!A1:A1");
 
             action.ValueInputOption = SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.RAW;
 
