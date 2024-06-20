@@ -8,38 +8,31 @@ namespace Glarbot
 {
     internal class Glarbot : BackgroundService
     {
+        private readonly INotificationService _notificationService;
         private readonly IGoogleSheetsService _googleSheetsService;
         private readonly Settings _settings;
-        private readonly GoogleSettings _googleSettings;
         private readonly ILogger<Glarbot> _logger;
 
-        public Glarbot(IGoogleSheetsService sheetsService,
+        public Glarbot(INotificationService notificationService,
+            IGoogleSheetsService sheetsService,
             IOptions<Settings> settings,
-            IOptions<GoogleSettings> googleSettings,
             ILogger<Glarbot> logger)
         {
+            _notificationService = notificationService;
             _googleSheetsService = sheetsService;
             _settings = settings.Value;
-            _googleSettings = googleSettings.Value;
             _logger = logger;
         }
-
-        // as per new httpclient guidelines
-        // https://learn.microsoft.com/en-us/dotnet/fundamentals/networking/http/httpclient-guidelines
-        private static readonly HttpClient _pushoverClient = new HttpClient(new SocketsHttpHandler
-        {
-            PooledConnectionLifetime = TimeSpan.FromMinutes(5)
-        });
 
         protected override async Task ExecuteAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Starting application.");
+            await _notificationService.PushNotification("Glarbot", "Starting application.", cancellationToken: cancellationToken);
 
             var lastPoll = DateTimeOffset.Now;
             var failCount = 0;
 
-            var test = await _googleSheetsService.GetAsync("Data!A1:A1", cancellationToken);
-            _logger.LogInformation("Test: {test}", test);
+            await _googleSheetsService.UpdateAsync("Data!L2:L2", DateTime.UtcNow.ToString(), cancellationToken);
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -70,7 +63,7 @@ namespace Glarbot
                 {
                     _logger.LogInformation("Reddit not responding.");
 
-                    await PushNotification("Glarbot", "Reddit not responding.", null, cancellationToken);
+                    await _notificationService.PushNotification("Glarbot", "Reddit not responding.", null, cancellationToken);
                 }
 
                 if (nodes != null)
@@ -105,7 +98,7 @@ namespace Glarbot
                     }
 
                     _logger.LogInformation(
-                        "Dumped all posts. Waiting until next poll time: {pollTime}",
+                        "Waiting until next poll time: {pollTime}",
                         DateTimeOffset.Now.AddMinutes(_settings.PollRateInMinutes));
                 }
 
@@ -190,43 +183,6 @@ namespace Glarbot
             _logger.LogInformation("Found {count} new posts.", posts.Count);
 
             return posts;
-        }
-
-        private async Task PushNotification(string title, string message, string? url = default, CancellationToken cancellationToken = default)
-        {
-            // TODO: customizable notification text
-            var notification = new Dictionary<string, string>
-            {
-                { "token", _settings.PushoverAppKey },
-                { "user", _settings.PushoverUserKey },
-                { "title", title },
-                { "message", message }
-            };
-
-            if (!string.IsNullOrWhiteSpace(url))
-            {
-                notification.Add("url", url);
-                notification.Add("url_title", "Read more");
-            }
-
-            try
-            {
-                await _pushoverClient.PostAsync(
-                    "https://api.pushover.net/1/messages.json",
-                    new FormUrlEncodedContent(notification),
-                    cancellationToken);
-            }
-            catch (HttpRequestException)
-            {
-                //TODO: retry logic
-            }
-            catch (TaskCanceledException ex)
-            {
-                //TODO: logging these for the time being for debugging
-                _logger.LogInformation(ex, "Task Cancelled Exception");
-            }
-
-            _logger.LogInformation("Notification pushed.");
         }
     }
 }

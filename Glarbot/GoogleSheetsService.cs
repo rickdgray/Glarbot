@@ -9,14 +9,17 @@ namespace Glarbot
 {
     internal class GoogleSheetsService : IGoogleSheetsService
     {
+        private readonly INotificationService _notificationService;
         private readonly GoogleSettings _googleSettings;
         private readonly ILogger<GoogleSheetsService> _logger;
 
         private readonly SheetsService _sheetsService;
 
-        public GoogleSheetsService(IOptions<GoogleSettings> googleSettings,
+        public GoogleSheetsService(INotificationService notificationService,
+            IOptions<GoogleSettings> googleSettings,
             ILogger<GoogleSheetsService> logger)
         {
+            _notificationService = notificationService;
             _googleSettings = googleSettings.Value;
             _logger = logger;
             _sheetsService = GetSheetsService();
@@ -24,8 +27,8 @@ namespace Glarbot
 
         public async Task<ValueRange> GetAsync(string range, CancellationToken cancellationToken)
         {
-            return await _sheetsService.Spreadsheets.Values.Get(_googleSettings.SpreadsheetId, range)
-                .ExecuteAsync(cancellationToken);
+            var action = _sheetsService.Spreadsheets.Values.Get(_googleSettings.SpreadsheetId, range);
+            return await ExecuteAsync(action, cancellationToken);
         }
 
         public async Task UpdateAsync(string range, string value, CancellationToken cancellationToken)
@@ -40,7 +43,7 @@ namespace Glarbot
 
             action.ValueInputOption = SpreadsheetsResource.ValuesResource.UpdateRequest.ValueInputOptionEnum.RAW;
 
-            await action.ExecuteAsync(cancellationToken);
+            await ExecuteAsync(action, cancellationToken);
         }
 
         public async Task AppendAsync(IEnumerable<string> values, CancellationToken cancellationToken)
@@ -56,7 +59,22 @@ namespace Glarbot
 
             action.ValueInputOption = SpreadsheetsResource.ValuesResource.AppendRequest.ValueInputOptionEnum.RAW;
 
-            await action.ExecuteAsync(cancellationToken);
+            await ExecuteAsync(action, cancellationToken);
+        }
+
+        private async Task<T> ExecuteAsync<T>(SheetsBaseServiceRequest<T> action, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                return await action.ExecuteAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Couldn't get data from Google Sheets.");
+                await _notificationService.PushNotification("Glarbot", "Couldn't get data from Google Sheets.", cancellationToken: cancellationToken);
+            }
+
+            return default!;
         }
 
         private SheetsService GetSheetsService()
